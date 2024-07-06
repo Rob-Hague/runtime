@@ -706,6 +706,35 @@ namespace System.Numerics
             return Number.TryParseBigInteger(value, style, NumberFormatInfo.GetInstance(provider), out result) == Number.ParsingStatus.OK;
         }
 
+        /// <inheritdoc cref="IUtf8SpanParsable{TSelf}.Parse(ReadOnlySpan{byte}, IFormatProvider?)" />
+        public static BigInteger Parse(ReadOnlySpan<byte> utf8Text, IFormatProvider? provider)
+        {
+            return Parse(utf8Text, NumberStyles.Integer, provider);
+        }
+
+        /// <inheritdoc cref="INumberBase{TSelf}.Parse(ReadOnlySpan{byte}, NumberStyles, IFormatProvider?)" />
+        public static BigInteger Parse(ReadOnlySpan<byte> utf8Text, NumberStyles style = NumberStyles.Integer, IFormatProvider? provider = null)
+        {
+            return Number.ParseBigInteger(utf8Text, style, NumberFormatInfo.GetInstance(provider));
+        }
+
+        public static bool TryParse(ReadOnlySpan<byte> utf8Text, [MaybeNullWhen(false)] out BigInteger result)
+        {
+            return TryParse(utf8Text, NumberStyles.Integer, provider: null, out result);
+        }
+
+        /// <inheritdoc cref="IUtf8SpanParsable{TSelf}.TryParse(ReadOnlySpan{byte}, IFormatProvider?, out TSelf)" />
+        public static bool TryParse(ReadOnlySpan<byte> utf8Text, IFormatProvider? provider, [MaybeNullWhen(false)] out BigInteger result)
+        {
+            return TryParse(utf8Text, NumberStyles.Integer, provider, out result);
+        }
+
+        /// <inheritdoc cref="INumberBase{TSelf}.TryParse(ReadOnlySpan{byte}, NumberStyles, IFormatProvider?, out TSelf)" />
+        public static bool TryParse(ReadOnlySpan<byte> utf8Text, NumberStyles style, IFormatProvider? provider, [MaybeNullWhen(false)] out BigInteger result)
+        {
+            return Number.TryParseBigInteger(utf8Text, style, NumberFormatInfo.GetInstance(provider), out result) == Number.ParsingStatus.OK;
+        }
+
         public static int Compare(BigInteger left, BigInteger right)
         {
             return left.CompareTo(right);

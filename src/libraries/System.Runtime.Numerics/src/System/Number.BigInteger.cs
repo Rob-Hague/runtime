@@ -57,7 +57,18 @@ namespace System
             return true;
         }
 
-        internal static unsafe ParsingStatus TryParseBigInteger(ReadOnlySpan<char> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+        internal static ParsingStatus TryParseBigInteger(ReadOnlySpan<char> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+        {
+            return TryParseBigInteger(MemoryMarshal.Cast<char, Utf16Char>(value), style, info, out result);
+        }
+
+        internal static ParsingStatus TryParseBigInteger(ReadOnlySpan<byte> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+        {
+            return TryParseBigInteger(MemoryMarshal.Cast<byte, Utf8Char>(value), style, info, out result);
+        }
+
+        internal static ParsingStatus TryParseBigInteger<TChar>(ReadOnlySpan<TChar> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+            where TChar : unmanaged, IUtfChar<TChar>
         {
             if (!TryValidateParseStyleInteger(style, out ArgumentException? e))
             {
@@ -66,18 +77,19 @@ namespace System
 
             if ((style & NumberStyles.AllowHexSpecifier) != 0)
             {
-                return TryParseBigIntegerHexOrBinaryNumberStyle<BigIntegerHexParser<char>, char>(value, style, out result);
+                return TryParseBigIntegerHexOrBinaryNumberStyle<BigIntegerHexParser<TChar>, TChar>(value, style, out result);
             }
 
             if ((style & NumberStyles.AllowBinarySpecifier) != 0)
             {
-                return TryParseBigIntegerHexOrBinaryNumberStyle<BigIntegerBinaryParser<char>, char>(value, style, out result);
+                return TryParseBigIntegerHexOrBinaryNumberStyle<BigIntegerBinaryParser<TChar>, TChar>(value, style, out result);
             }
 
             return TryParseBigIntegerNumber(value, style, info, out result);
         }
 
-        internal static unsafe ParsingStatus TryParseBigIntegerNumber(ReadOnlySpan<char> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+        internal static unsafe ParsingStatus TryParseBigIntegerNumber<TChar>(ReadOnlySpan<TChar> value, NumberStyles style, NumberFormatInfo info, out BigInteger result)
+            where TChar : unmanaged, IUtfChar<TChar>
         {
             scoped Span<byte> buffer;
             byte[]? arrayFromPool = null;
@@ -102,7 +114,7 @@ namespace System
             {
                 NumberBuffer number = new NumberBuffer(NumberBufferKind.Integer, buffer);
 
-                if (!TryStringToNumber(MemoryMarshal.Cast<char, Utf16Char>(value), style, ref number, info))
+                if (!TryStringToNumber(value, style, ref number, info))
                 {
                     result = default;
                     ret = ParsingStatus.Failed;
@@ -123,6 +135,17 @@ namespace System
 
         internal static BigInteger ParseBigInteger(ReadOnlySpan<char> value, NumberStyles style, NumberFormatInfo info)
         {
+            return ParseBigInteger(MemoryMarshal.Cast<char, Utf16Char>(value), style, info);
+        }
+
+        internal static BigInteger ParseBigInteger(ReadOnlySpan<byte> value, NumberStyles style, NumberFormatInfo info)
+        {
+            return ParseBigInteger(MemoryMarshal.Cast<byte, Utf8Char>(value), style, info);
+        }
+
+        internal static BigInteger ParseBigInteger<TChar>(ReadOnlySpan<TChar> value, NumberStyles style, NumberFormatInfo info)
+            where TChar : unmanaged, IUtfChar<TChar>
+        {
             if (!TryValidateParseStyleInteger(style, out ArgumentException? e))
             {
                 throw e;
@@ -139,7 +162,7 @@ namespace System
 
         internal static ParsingStatus TryParseBigIntegerHexOrBinaryNumberStyle<TParser, TChar>(ReadOnlySpan<TChar> value, NumberStyles style, out BigInteger result)
             where TParser : struct, IBigIntegerHexOrBinaryParser<TParser, TChar>
-            where TChar : unmanaged, IBinaryInteger<TChar>
+            where TChar : unmanaged, IUtfChar<TChar>
         {
             int whiteIndex;
 
@@ -148,7 +171,7 @@ namespace System
             {
                 for (whiteIndex = 0; whiteIndex < value.Length; whiteIndex++)
                 {
-                    if (!IsWhite(uint.CreateTruncating(value[whiteIndex])))
+                    if (!IsWhite(TChar.CastToUInt32(value[whiteIndex])))
                         break;
                 }
 
@@ -160,7 +183,7 @@ namespace System
             {
                 for (whiteIndex = value.Length - 1; whiteIndex >= 0; whiteIndex--)
                 {
-                    if (!IsWhite(uint.CreateTruncating(value[whiteIndex])))
+                    if (!IsWhite(TChar.CastToUInt32(value[whiteIndex])))
                         break;
                 }
 
@@ -174,7 +197,7 @@ namespace System
 
             // Remember the sign from original leading input
             // Invalid digits will be caught in parsing below
-            uint signBits = TParser.GetSignBitsIfValid(uint.CreateTruncating(value[0]));
+            uint signBits = TParser.GetSignBitsIfValid(TChar.CastToUInt32(value[0]));
 
             // Start from leading blocks. Leading blocks can be unaligned, or whole of 0/F's that need to be trimmed.
             int leadingBitsCount = value.Length % TParser.DigitsPerBlock;
@@ -1207,7 +1230,7 @@ namespace System
 
     internal interface IBigIntegerHexOrBinaryParser<TParser, TChar>
         where TParser : struct, IBigIntegerHexOrBinaryParser<TParser, TChar>
-        where TChar : unmanaged, IBinaryInteger<TChar>
+        where TChar : unmanaged, IUtfChar<TChar>
     {
         static abstract int BitsPerDigit { get; }
 
@@ -1224,8 +1247,11 @@ namespace System
             {
                 return uint.TryParse(MemoryMarshal.Cast<TChar, char>(input), TParser.BlockNumberStyle, null, out result);
             }
-
-            throw new NotSupportedException();
+            else
+            {
+                Debug.Assert(typeof(TChar) == typeof(byte));
+                return uint.TryParse(MemoryMarshal.Cast<TChar, byte>(input), TParser.BlockNumberStyle, null, out result);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1252,7 +1278,7 @@ namespace System
     }
 
     internal readonly struct BigIntegerHexParser<TChar> : IBigIntegerHexOrBinaryParser<BigIntegerHexParser<TChar>, TChar>
-        where TChar : unmanaged, IBinaryInteger<TChar>
+        where TChar : unmanaged, IUtfChar<TChar>
     {
         public static int BitsPerDigit => 4;
 
@@ -1288,7 +1314,7 @@ namespace System
     }
 
     internal readonly struct BigIntegerBinaryParser<TChar> : IBigIntegerHexOrBinaryParser<BigIntegerBinaryParser<TChar>, TChar>
-        where TChar : unmanaged, IBinaryInteger<TChar>
+        where TChar : unmanaged, IUtfChar<TChar>
     {
         public static int BitsPerDigit => 1;
 
